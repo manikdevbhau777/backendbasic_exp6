@@ -1,0 +1,63 @@
+// jwt_banking_api.js
+const express = require("express");
+const jwt = require("jsonwebtoken");
+
+const app = express();
+app.use(express.json());
+
+const SECRET_KEY = "mysecretkey";
+
+// Dummy user and balance
+let user = { username: "user1", password: "password123", balance: 1000 };
+
+// Login route
+app.post("/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (username === user.username && password === user.password) {
+    const token = jwt.sign({ username }, SECRET_KEY, { expiresIn: "1h" });
+    res.json({ token });
+  } else {
+    res.status(401).json({ message: "Invalid credentials" });
+  }
+});
+
+// Middleware to verify JWT
+function verifyToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.status(403).json({ message: "Invalid or expired token" });
+
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, SECRET_KEY, (err, decoded) => {
+    if (err) return res.status(403).json({ message: "Invalid or expired token" });
+    req.user = decoded;
+    next();
+  });
+}
+
+// Get balance
+app.get("/balance", verifyToken, (req, res) => {
+  res.json({ balance: user.balance });
+});
+
+// Deposit money
+app.post("/deposit", verifyToken, (req, res) => {
+  const { amount } = req.body;
+  user.balance += amount;
+  res.json({ message: `Deposited $${amount}`, newBalance: user.balance });
+});
+
+// Withdraw money
+app.post("/withdraw", verifyToken, (req, res) => {
+  const { amount } = req.body;
+
+  if (user.balance < amount) {
+    return res.status(400).json({ message: "Insufficient balance" });
+  }
+
+  user.balance -= amount;
+  res.json({ message: `Withdrew $${amount}`, newBalance: user.balance });
+});
+
+// Export app (no localhost reference)
+module.exports = app;
